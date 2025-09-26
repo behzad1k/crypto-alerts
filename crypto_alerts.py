@@ -65,7 +65,7 @@ class CryptoAlertSystem:
         self.symbol_queue = deque()  # Circular queue for symbols
         self.symbol_stats = {}  # Track stats per symbol
         self.last_check_times = {}  # Track last check time per symbol
-        self.recent_emails = deque()  # Track recent emails to prevent duplicates
+        self.last_sent_signals = {}  # Track last sent signal per symbol
         self.running = False
 
     def initialize_symbol_queue(self, symbols):
@@ -283,60 +283,42 @@ class CryptoAlertSystem:
 
         return position_size, position_value, risk_pct * 100
 
-    def create_email_signature(self, symbol, signal, confidence, reason):
-        """Create a unique signature for email content to detect duplicates"""
-        # Create a signature based on core content that identifies the same signal
-        return f"{symbol}_{signal}_{confidence}_{hash(reason) % 10000}"
+    def has_signal_changed(self, symbol, signal):
+        """Check if the signal has changed from the last sent signal for this symbol"""
+        last_signal = self.last_sent_signals.get(symbol)
 
-    def is_duplicate_email(self, email_signature, duplicate_window_minutes=5):
-        """Check if the same email was sent within the duplicate window"""
-        now = datetime.now()
-        cutoff_time = now - timedelta(minutes=duplicate_window_minutes)
+        if last_signal is None:
+            # No previous signal sent, so this is a new signal
+            return True
 
-        # Clean up old entries first to prevent memory buildup
-        while self.recent_emails and self.recent_emails[0]['timestamp'] < cutoff_time:
-            self.recent_emails.popleft()
+        if last_signal != signal:
+            # Signal has changed (e.g., from SELL to BUY or BUY to SELL)
+            logging.info(f"Signal changed for {symbol}: {last_signal} -> {signal}")
+            return True
 
-        # Check for duplicates in recent emails
-        for email_record in self.recent_emails:
-            if email_record['signature'] == email_signature:
-                time_since = (now - email_record['timestamp']).total_seconds() / 60
-                logging.info(f"Duplicate email blocked: same signal sent {time_since:.1f} minutes ago")
-                return True
-
+        # Same signal as before
+        logging.info(f"Signal unchanged for {symbol}: still {signal} - blocking duplicate")
         return False
-
-    def record_sent_email(self, email_signature):
-        """Record that an email was sent to prevent future duplicates"""
-        self.recent_emails.append({
-            'signature': email_signature,
-            'timestamp': datetime.now()
-        })
-
-        # Keep only last 50 emails to prevent excessive memory usage
-        while len(self.recent_emails) > 50:
-            self.recent_emails.popleft()
 
     def should_send_alert(self, symbol, signal, confidence, reason=""):
         """Check if we should send alert (avoid spam and duplicates)"""
-        # First check for duplicates in the past 5 minutes
-        email_signature = self.create_email_signature(symbol, signal, confidence, reason)
-        if self.is_duplicate_email(email_signature):
+        # First check if signal has changed from last sent
+        if not self.has_signal_changed(symbol, signal):
             return False
 
-        # Then check the existing spam prevention logic
+        # Then check the existing spam prevention logic based on confidence
         key = f"{symbol}_{signal}_{confidence}"
         last_alert = self.last_signals.get(key, datetime.min)
 
         # Send alert if:
-        # 1. High confidence: once every 4 hours
-        # 2. Medium confidence: once every 8 hours
-        # 3. Different signal than last time
+        # 1. High confidence: immediately (0 seconds - signal change handles spam)
+        # 2. Medium confidence: once every 2 hours
+        # 3. Low confidence: once every 8 hours
 
         time_threshold = {
-            'HIGH': timedelta(seconds=0),
-            'MEDIUM': timedelta(seconds=60),
-            'low': timedelta(hours=12)
+            'HIGH': timedelta(seconds=0),  # Send HIGH confidence immediately
+            'MEDIUM': timedelta(hours=2),  # Reduced from 8 to 2 hours
+            'low': timedelta(hours=8)      # Reduced from 12 to 8 hours
         }
 
         time_diff = datetime.now() - last_alert
@@ -414,9 +396,6 @@ python crypto_alerts.py
     def send_email_alert(self, symbol, signal, confidence, reason, current_price, position_info):
         """Send email alert"""
         try:
-            # Create email signature for tracking
-            email_signature = self.create_email_signature(symbol, signal, confidence, reason)
-
             msg = MIMEMultipart()
             msg['From'] = self.email_config['sender_email']
             msg['To'] = self.email_config['recipient_email']
@@ -433,6 +412,9 @@ ACTION: {signal}
 CONFIDENCE: {confidence}
 CURRENT PRICE: ${current_price:,.2f}
 
+SIGNAL ANALYSIS:
+{reason}
+
 POSITION SUGGESTION:
 • Position Size: {position_info['size']:.4f} {symbol}
 • Position Value: ${position_info['value']:,.2f}
@@ -440,6 +422,10 @@ POSITION SUGGESTION:
 • Stop Loss: ${position_info['stop_loss']:,.2f} ({position_info['stop_loss_pct']:.1f}%)
 
 Alert Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+---
+This alert is based on our 91% accurate MACD+Momentum strategy.
+Trade at your own risk. Past performance doesn't guarantee future results.
             """
 
             msg.attach(MIMEText(body, 'plain'))
@@ -453,8 +439,8 @@ Alert Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             server.sendmail(self.email_config['sender_email'], self.email_config['recipient_email'], text)
             server.quit()
 
-            # Record the sent email to prevent duplicates
-            self.record_sent_email(email_signature)
+            # Record the last sent signal for this symbol
+            self.last_sent_signals[symbol] = signal
 
             logging.info(f"Alert sent: {symbol} {signal} ({confidence})")
             return True
@@ -586,7 +572,7 @@ Alert Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
                     if success:
                         logging.info(f"*** ALERT SENT: {symbol} {signal} ({confidence}) ***")
                 else:
-                    logging.info(f"Alert blocked: {symbol} {signal} ({confidence}) - duplicate or too frequent")
+                    logging.info(f"Alert blocked: {symbol} {signal} ({confidence}) - signal unchanged or too frequent")
 
         except Exception as e:
             logging.error(f"Error monitoring {symbol}: {e}")
@@ -638,7 +624,7 @@ Alert Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
             return
 
         # Target: each symbol should be checked at least every 15 minutes
-        target_symbol_interval = 1  # 15 minutes in seconds
+        target_symbol_interval = 15 * 60  # 15 minutes in seconds
         actual_interval = max(check_interval_seconds, target_symbol_interval / total_symbols)
 
         logging.info(f"Starting circular queue monitoring:")
@@ -799,7 +785,7 @@ if __name__ == "__main__":
     parser.add_argument('--test-apis', action='store_true', help='Test API connections')
     parser.add_argument('--list-symbols', action='store_true', help='List supported symbols')
     parser.add_argument('--symbols', nargs='+', default=['ETH', 'BTC'], help='Symbols to monitor')
-    parser.add_argument('--interval', type=int, default=1, help='Check interval per symbol in seconds')
+    parser.add_argument('--interval', type=int, default=30, help='Check interval per symbol in seconds')
     parser.add_argument('--legacy-interval', type=int, help='Use legacy interval-based monitoring (minutes)')
 
     args = parser.parse_args()
