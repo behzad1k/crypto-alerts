@@ -1,8 +1,14 @@
 """
-Crypto Trading Alert System - FREE Edition
+Crypto Trading Alert System - FREE Edition with Circular Queue
 
 This script monitors crypto prices using completely FREE APIs and sends email alerts
 when high-confidence trading signals are detected based on our 91% accurate strategies.
+
+CIRCULAR QUEUE IMPLEMENTATION:
+- Symbols are processed one by one in a round-robin fashion
+- No long sleep periods - continuous monitoring
+- More frequent individual symbol checks
+- Better distribution of API requests
 
 FREE APIs USED:
 1. Binance API (Primary) - Real-time OHLCV data, no limits, no API key required
@@ -16,6 +22,7 @@ FEATURES:
 - Anti-spam protection (won't flood your inbox)
 - Supports 12+ major cryptocurrencies
 - Email alerts with clear buy/sell instructions
+- Circular queue for continuous symbol monitoring
 
 REQUIREMENTS:
 - No API keys needed!
@@ -44,6 +51,8 @@ import time
 import json
 import os
 import logging
+from collections import deque
+import threading
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -53,6 +62,28 @@ class CryptoAlertSystem:
         self.email_config = email_config
         self.last_signals = {}  # Track last signals to avoid spam
         self.data_cache = {}  # Cache recent data
+        self.symbol_queue = deque()  # Circular queue for symbols
+        self.symbol_stats = {}  # Track stats per symbol
+        self.last_check_times = {}  # Track last check time per symbol
+        self.recent_emails = deque()  # Track recent emails to prevent duplicates
+        self.running = False
+
+    def initialize_symbol_queue(self, symbols):
+        """Initialize the circular queue with symbols"""
+        self.symbol_queue = deque(symbols)
+        self.symbol_stats = {symbol: {'checks': 0, 'signals': 0, 'last_signal_time': None} for symbol in symbols}
+        self.last_check_times = {symbol: None for symbol in symbols}
+        logging.info(f"Initialized circular queue with {len(symbols)} symbols: {symbols}")
+
+    def get_next_symbol(self):
+        """Get next symbol from circular queue"""
+        if not self.symbol_queue:
+            return None
+
+        # Rotate the queue - take from left, add to right
+        symbol = self.symbol_queue.popleft()
+        self.symbol_queue.append(symbol)
+        return symbol
 
     def get_historical_data(self, symbol, hours=500):
         """Fetch historical data from Binance API (completely free)"""
@@ -252,8 +283,48 @@ class CryptoAlertSystem:
 
         return position_size, position_value, risk_pct * 100
 
-    def should_send_alert(self, symbol, signal, confidence):
-        """Check if we should send alert (avoid spam)"""
+    def create_email_signature(self, symbol, signal, confidence, reason):
+        """Create a unique signature for email content to detect duplicates"""
+        # Create a signature based on core content that identifies the same signal
+        return f"{symbol}_{signal}_{confidence}_{hash(reason) % 10000}"
+
+    def is_duplicate_email(self, email_signature, duplicate_window_minutes=5):
+        """Check if the same email was sent within the duplicate window"""
+        now = datetime.now()
+        cutoff_time = now - timedelta(minutes=duplicate_window_minutes)
+
+        # Clean up old entries first to prevent memory buildup
+        while self.recent_emails and self.recent_emails[0]['timestamp'] < cutoff_time:
+            self.recent_emails.popleft()
+
+        # Check for duplicates in recent emails
+        for email_record in self.recent_emails:
+            if email_record['signature'] == email_signature:
+                time_since = (now - email_record['timestamp']).total_seconds() / 60
+                logging.info(f"Duplicate email blocked: same signal sent {time_since:.1f} minutes ago")
+                return True
+
+        return False
+
+    def record_sent_email(self, email_signature):
+        """Record that an email was sent to prevent future duplicates"""
+        self.recent_emails.append({
+            'signature': email_signature,
+            'timestamp': datetime.now()
+        })
+
+        # Keep only last 50 emails to prevent excessive memory usage
+        while len(self.recent_emails) > 50:
+            self.recent_emails.popleft()
+
+    def should_send_alert(self, symbol, signal, confidence, reason=""):
+        """Check if we should send alert (avoid spam and duplicates)"""
+        # First check for duplicates in the past 5 minutes
+        email_signature = self.create_email_signature(symbol, signal, confidence, reason)
+        if self.is_duplicate_email(email_signature):
+            return False
+
+        # Then check the existing spam prevention logic
         key = f"{symbol}_{signal}_{confidence}"
         last_alert = self.last_signals.get(key, datetime.min)
 
@@ -263,8 +334,8 @@ class CryptoAlertSystem:
         # 3. Different signal than last time
 
         time_threshold = {
-            'HIGH': timedelta(hours=4),
-            'MEDIUM': timedelta(hours=8),
+            'HIGH': timedelta(seconds=0),
+            'MEDIUM': timedelta(seconds=60),
             'low': timedelta(hours=12)
         }
 
@@ -281,28 +352,28 @@ class CryptoAlertSystem:
             msg = MIMEMultipart()
             msg['From'] = self.email_config['sender_email']
             msg['To'] = self.email_config['recipient_email']
-            msg['Subject'] = "🧪 Crypto Alert System - Test Email"
+            msg['Subject'] = "Crypto Alert System - Test Email"
 
             # Test email body
             body = f"""
-🧪 EMAIL TEST SUCCESSFUL! 🧪
+Email Test Successful!
 
 This is a test email from your Crypto Trading Alert System.
 
-📧 Configuration Details:
+Configuration Details:
 • From: {self.email_config['sender_email']}
 • To: {self.email_config['recipient_email']}
 • SMTP Server: {self.email_config['smtp_server']}:{self.email_config['smtp_port']}
 
-✅ If you're reading this, your email setup is working perfectly!
+If you're reading this, your email setup is working perfectly!
 
-🚀 Ready to receive trading alerts:
+Ready to receive trading alerts:
 • HIGH confidence signals (91% accuracy)
 • MEDIUM confidence signals (55% accuracy)
 • Smart position sizing recommendations
 • Automatic stop-loss calculations
 
-⏰ Test sent at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Test sent at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 ---
 Next step: Run the monitoring system to get real trading alerts!
@@ -320,53 +391,58 @@ python crypto_alerts.py
             server.sendmail(self.email_config['sender_email'], self.email_config['recipient_email'], text)
             server.quit()
 
-            logging.info("✅ Test email sent successfully!")
-            print("✅ Test email sent successfully!")
-            print(f"📧 Check your inbox: {self.email_config['recipient_email']}")
+            logging.info("Test email sent successfully!")
+            print("Test email sent successfully!")
+            print(f"Check your inbox: {self.email_config['recipient_email']}")
             return True
 
         except smtplib.SMTPAuthenticationError:
-            error_msg = "❌ Email authentication failed!"
+            error_msg = "Email authentication failed!"
             print(error_msg)
-            print("💡 Common fixes:")
+            print("Common fixes:")
             print("   • For Gmail: Use an 'App Password' instead of your regular password")
             print("   • Enable 2-Factor Authentication first")
             print("   • Check if 'Less secure app access' is enabled (not recommended)")
+            logging.error(error_msg)
+            return False
+        except Exception as e:
+            error_msg = f"Failed to send test email: {e}"
+            print(error_msg)
             logging.error(error_msg)
             return False
 
     def send_email_alert(self, symbol, signal, confidence, reason, current_price, position_info):
         """Send email alert"""
         try:
+            # Create email signature for tracking
+            email_signature = self.create_email_signature(symbol, signal, confidence, reason)
+
             msg = MIMEMultipart()
             msg['From'] = self.email_config['sender_email']
             msg['To'] = self.email_config['recipient_email']
 
-            # Emoji for attention
-            emoji = "🚀" if signal == "BUY" else "📉"
-            confidence_emoji = "🔥" if confidence == "HIGH" else "⚡" if confidence == "MEDIUM" else "💡"
-
-            msg['Subject'] = f"{emoji} {confidence} CONFIDENCE {symbol} {signal} SIGNAL {confidence_emoji}"
+            # Create subject line
+            msg['Subject'] = f"{confidence} CONFIDENCE {symbol} {signal} SIGNAL"
 
             # Create email body
             body = f"""
-{confidence_emoji} CRYPTO TRADING ALERT {confidence_emoji}
+CRYPTO TRADING ALERT
 
 SYMBOL: {symbol}
 ACTION: {signal}
 CONFIDENCE: {confidence}
 CURRENT PRICE: ${current_price:,.2f}
 
-📊 SIGNAL ANALYSIS:
+SIGNAL ANALYSIS:
 {reason}
 
-💰 POSITION SUGGESTION:
+POSITION SUGGESTION:
 • Position Size: {position_info['size']:.4f} {symbol}
 • Position Value: ${position_info['value']:,.2f}
 • Risk Level: {position_info['risk_pct']:.1f}% of portfolio
 • Stop Loss: ${position_info['stop_loss']:,.2f} ({position_info['stop_loss_pct']:.1f}%)
 
-⏰ Alert Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Alert Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 ---
 This alert is based on our 91% accurate MACD+Momentum strategy.
@@ -384,74 +460,8 @@ Trade at your own risk. Past performance doesn't guarantee future results.
             server.sendmail(self.email_config['sender_email'], self.email_config['recipient_email'], text)
             server.quit()
 
-            logging.info(f"Alert sent: {symbol} {signal} ({confidence})")
-            return True
-
-        except Exception as e:
-            logging.error(f"Failed to send email: {e}")
-            return False
-
-        except smtplib.SMTPException as e:
-            error_msg = f"❌ SMTP error: {e}"
-            print(error_msg)
-            print("💡 Check your SMTP server settings:")
-            print(f"   • Server: {self.email_config['smtp_server']}")
-            print(f"   • Port: {self.email_config['smtp_port']}")
-            logging.error(error_msg)
-            return False
-
-        except Exception as e:
-            error_msg = f"❌ Failed to send test email: {e}"
-            print(error_msg)
-            logging.error(error_msg)
-            return False
-        """Send email alert"""
-        try:
-            msg = MIMEMultipart()
-            msg['From'] = self.email_config['sender_email']
-            msg['To'] = self.email_config['recipient_email']
-
-            # Emoji for attention
-            emoji = "🚀" if signal == "BUY" else "📉"
-            confidence_emoji = "🔥" if confidence == "HIGH" else "⚡" if confidence == "MEDIUM" else "💡"
-
-            msg['Subject'] = f"{emoji} {confidence} CONFIDENCE {symbol} {signal} SIGNAL {confidence_emoji}"
-
-            # Create email body
-            body = f"""
-{confidence_emoji} CRYPTO TRADING ALERT {confidence_emoji}
-
-SYMBOL: {symbol}
-ACTION: {signal}
-CONFIDENCE: {confidence}
-CURRENT PRICE: ${current_price:,.2f}
-
-📊 SIGNAL ANALYSIS:
-{reason}
-
-💰 POSITION SUGGESTION:
-• Position Size: {position_info['size']:.4f} {symbol}
-• Position Value: ${position_info['value']:,.2f}
-• Risk Level: {position_info['risk_pct']:.1f}% of portfolio
-• Stop Loss: ${position_info['stop_loss']:,.2f} ({position_info['stop_loss_pct']:.1f}%)
-
-⏰ Alert Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
----
-This alert is based on our 91% accurate MACD+Momentum strategy.
-Trade at your own risk. Past performance doesn't guarantee future results.
-            """
-
-            msg.attach(MIMEText(body, 'plain'))
-
-            # Send email
-            server = smtplib.SMTP(self.email_config['smtp_server'], self.email_config['smtp_port'])
-            server.starttls()
-            server.login(self.email_config['sender_email'], self.email_config['sender_password'])
-
-            text = msg.as_string()
-            server.sendmail(self.email_config['sender_email'], self.email_config['recipient_email'], text)
-            server.quit()
+            # Record the sent email to prevent duplicates
+            self.record_sent_email(email_signature)
 
             logging.info(f"Alert sent: {symbol} {signal} ({confidence})")
             return True
@@ -462,7 +472,6 @@ Trade at your own risk. Past performance doesn't guarantee future results.
 
     def get_alternative_data(self, symbol):
         """Try alternative free APIs if Binance fails"""
-
         # Option 2: CryptoCompare (free tier)
         try:
             url = "https://min-api.cryptocompare.com/data/v2/histohour"
@@ -531,6 +540,10 @@ Trade at your own risk. Past performance doesn't guarantee future results.
     def monitor_symbol(self, symbol):
         """Monitor a single symbol and send alerts if needed"""
         try:
+            # Update stats
+            self.symbol_stats[symbol]['checks'] += 1
+            self.last_check_times[symbol] = datetime.now()
+
             # Get data - try multiple free sources
             data = self.get_historical_data(symbol, hours=168)  # 1 week of hourly data
 
@@ -551,11 +564,19 @@ Trade at your own risk. Past performance doesn't guarantee future results.
 
             current_price = data_with_indicators['close'].iloc[-1]
 
-            logging.info(f"{symbol}: Price=${current_price:.2f}, Signal={signal}, Confidence={confidence}")
+            # Format output for circular queue monitoring
+            check_count = self.symbol_stats[symbol]['checks']
+            time_since_last = self.get_time_since_last_check(symbol)
+
+            logging.info(f"[{check_count:4d}] {symbol}: ${current_price:8.2f} | {signal or 'HOLD':4s} | {confidence:6s} | {time_since_last}")
 
             if signal and confidence in ['HIGH', 'MEDIUM']:
-                # Check if we should send alert
-                if self.should_send_alert(symbol, signal, confidence):
+                # Check if we should send alert (includes duplicate checking)
+                if self.should_send_alert(symbol, signal, confidence, reason):
+                    # Update signal stats
+                    self.symbol_stats[symbol]['signals'] += 1
+                    self.symbol_stats[symbol]['last_signal_time'] = datetime.now()
+
                     # Calculate position info
                     pos_size, pos_value, risk_pct = self.calculate_position_size(signal, confidence, current_price)
 
@@ -568,31 +589,112 @@ Trade at your own risk. Past performance doesn't guarantee future results.
                     }
 
                     # Send alert
-                    self.send_email_alert(symbol, signal, confidence, reason, current_price, position_info)
+                    success = self.send_email_alert(symbol, signal, confidence, reason, current_price, position_info)
+                    if success:
+                        logging.info(f"*** ALERT SENT: {symbol} {signal} ({confidence}) ***")
+                else:
+                    logging.info(f"Alert blocked: {symbol} {signal} ({confidence}) - duplicate or too frequent")
 
         except Exception as e:
             logging.error(f"Error monitoring {symbol}: {e}")
 
+    def get_time_since_last_check(self, symbol):
+        """Get time since last check for this symbol"""
+        if symbol not in self.last_check_times or self.last_check_times[symbol] is None:
+            return "First check"
+
+        now = datetime.now()
+        last_check = self.last_check_times[symbol]
+        time_diff = now - last_check
+
+        if time_diff.total_seconds() < 60:
+            return f"{int(time_diff.total_seconds())}s ago"
+        elif time_diff.total_seconds() < 3600:
+            return f"{int(time_diff.total_seconds() / 60)}m ago"
+        else:
+            return f"{time_diff.total_seconds() / 3600:.1f}h ago"
+
+    def print_stats(self):
+        """Print monitoring statistics"""
+        print("\n" + "="*70)
+        print("MONITORING STATISTICS")
+        print("="*70)
+        print(f"{'SYMBOL':<8} {'CHECKS':<8} {'SIGNALS':<8} {'LAST SIGNAL':<20}")
+        print("-" * 70)
+
+        for symbol in self.symbol_queue:
+            stats = self.symbol_stats[symbol]
+            last_signal = "Never" if not stats['last_signal_time'] else stats['last_signal_time'].strftime('%m/%d %H:%M')
+            print(f"{symbol:<8} {stats['checks']:<8} {stats['signals']:<8} {last_signal:<20}")
+
+        total_checks = sum(stats['checks'] for stats in self.symbol_stats.values())
+        total_signals = sum(stats['signals'] for stats in self.symbol_stats.values())
+        print("-" * 70)
+        print(f"{'TOTAL':<8} {total_checks:<8} {total_signals:<8}")
+        print("="*70)
+
+    def run_circular_monitoring(self, symbols=['ETH', 'BTC'], check_interval_seconds=30):
+        """Run continuous monitoring using circular queue"""
+        self.initialize_symbol_queue(symbols)
+        self.running = True
+
+        # Calculate time per symbol to maintain reasonable intervals
+        total_symbols = len(symbols)
+        if total_symbols == 0:
+            logging.error("No symbols to monitor")
+            return
+
+        # Target: each symbol should be checked at least every 15 minutes
+        target_symbol_interval = 15 * 60  # 15 minutes in seconds
+        actual_interval = max(check_interval_seconds, target_symbol_interval / total_symbols)
+
+        logging.info(f"Starting circular queue monitoring:")
+        logging.info(f"• Symbols: {symbols}")
+        logging.info(f"• Check interval: {actual_interval:.1f} seconds per symbol")
+        logging.info(f"• Full cycle time: ~{(actual_interval * total_symbols) / 60:.1f} minutes")
+        logging.info(f"• Each symbol checked every ~{(actual_interval * total_symbols) / 60:.1f} minutes")
+
+        print(f"\nMonitoring started. Press Ctrl+C to stop and see statistics.\n")
+        print(f"{'COUNT':<6} {'SYMBOL':<8} {'PRICE':<12} {'SIGNAL':<6} {'CONF':<8} {'LAST CHECK':<15}")
+        print("-" * 65)
+
+        cycle_count = 0
+        start_time = datetime.now()
+
+        try:
+            while self.running:
+                symbol = self.get_next_symbol()
+                if symbol is None:
+                    logging.error("No symbols in queue")
+                    break
+
+                # Monitor the symbol
+                self.monitor_symbol(symbol)
+
+                # Show periodic stats every 100 checks
+                cycle_count += 1
+                if cycle_count % 100 == 0:
+                    elapsed = datetime.now() - start_time
+                    checks_per_hour = cycle_count / (elapsed.total_seconds() / 3600)
+                    print(f"\n[{cycle_count} checks completed, {checks_per_hour:.1f} checks/hour]")
+
+                # Sleep between symbol checks
+                time.sleep(actual_interval)
+
+        except KeyboardInterrupt:
+            logging.info("Monitoring stopped by user")
+            self.running = False
+            self.print_stats()
+        except Exception as e:
+            logging.error(f"Error in monitoring loop: {e}")
+            self.running = False
+
     def run_monitoring(self, symbols=['ETH', 'BTC'], interval_minutes=60):
-        """Run continuous monitoring"""
-        logging.info(f"Starting monitoring for {symbols} every {interval_minutes} minutes")
-
-        while True:
-            try:
-                for symbol in symbols:
-                    logging.info(f"Checking {symbol}...")
-                    self.monitor_symbol(symbol)
-                    time.sleep(10)  # Brief pause between symbols
-
-                logging.info(f"Sleeping for {interval_minutes} minutes...")
-                time.sleep(interval_minutes * 60)
-
-            except KeyboardInterrupt:
-                logging.info("Monitoring stopped by user")
-                break
-            except Exception as e:
-                logging.error(f"Error in monitoring loop: {e}")
-                time.sleep(300)  # Wait 5 minutes before retrying
+        """Legacy method - redirect to circular monitoring"""
+        logging.info("Redirecting to circular queue monitoring...")
+        # Convert interval to seconds per symbol
+        check_interval = max(30, (interval_minutes * 60) // len(symbols))
+        self.run_circular_monitoring(symbols, check_interval)
 
 def test_api_connections():
     """Test if the free APIs are working"""
@@ -641,61 +743,6 @@ def get_supported_symbols():
 
 def load_email_config():
     """Load email configuration from file or environment variables"""
-
-    # Try loading from config file first
-    try:
-        with open('email_config.json', 'r') as f:
-            config = json.load(f)
-            return config
-    except FileNotFoundError:
-        pass
-
-    # Fall back to environment variables
-    config = {
-        'sender_email': os.getenv('SENDER_EMAIL'),
-        'sender_password': os.getenv('SENDER_PASSWORD'),  # Use app password for Gmail
-        'recipient_email': os.getenv('RECIPIENT_EMAIL'),
-        'smtp_server': os.getenv('SMTP_SERVER', 'smtp.gmail.com'),
-        'smtp_port': int(os.getenv('SMTP_PORT', '587'))
-    }
-
-    # Validate required fields
-    required_fields = ['sender_email', 'sender_password', 'recipient_email']
-    missing_fields = [field for field in required_fields if not config.get(field)]
-
-    if missing_fields:
-        print(f"Missing required email configuration: {missing_fields}")
-        print("\nSetup Instructions:")
-        print("1. Create 'email_config.json' with your email settings, OR")
-        print("2. Set environment variables: SENDER_EMAIL, SENDER_PASSWORD, RECIPIENT_EMAIL")
-        print("\nExample email_config.json:")
-        print('''{
-    "sender_email": "your-email@gmail.com",
-    "sender_password": "your-app-password",
-    "recipient_email": "recipient@gmail.com",
-    "smtp_server": "smtp.gmail.com",
-    "smtp_port": 587
-}''')
-        return None
-
-    return config
-
-def create_sample_config():
-    """Create a sample configuration file"""
-    sample_config = {
-        "sender_email": "your-email@gmail.com",
-        "sender_password": "your-app-password",
-        "recipient_email": "recipient@gmail.com",
-        "smtp_server": "smtp.gmail.com",
-        "smtp_port": 587
-    }
-
-    with open('email_config_sample.json', 'w') as f:
-        json.dump(sample_config, f, indent=4)
-
-    print("Created 'email_config_sample.json' - please copy to 'email_config.json' and update with your details")
-    """Load email configuration from file or environment variables"""
-
     # Try loading from config file first
     try:
         with open('email_config.json', 'r') as f:
@@ -752,18 +799,15 @@ def create_sample_config():
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description='Crypto Trading Alert & Auto Trading System - FREE APIs')
+    parser = argparse.ArgumentParser(description='Crypto Trading Alert System - FREE APIs with Circular Queue')
     parser.add_argument('--create-config', action='store_true', help='Create sample email configuration file')
-    parser.add_argument('--create-trading', action='store_true', help='Create sample trading configuration file')
     parser.add_argument('--test', action='store_true', help='Run single test check (signals only)')
     parser.add_argument('--test-email', action='store_true', help='Send test email to verify email setup')
-    parser.add_argument('--test-trading', action='store_true', help='Test trading configuration and paper trading')
     parser.add_argument('--test-apis', action='store_true', help='Test API connections')
     parser.add_argument('--list-symbols', action='store_true', help='List supported symbols')
     parser.add_argument('--symbols', nargs='+', default=['ETH', 'BTC'], help='Symbols to monitor')
-    parser.add_argument('--interval', type=int, default=60, help='Check interval in minutes')
-    parser.add_argument('--enable-trading', action='store_true', help='Enable auto-trading (requires trading config)')
-    parser.add_argument('--portfolio-status', action='store_true', help='Show current portfolio status')
+    parser.add_argument('--interval', type=int, default=30, help='Check interval per symbol in seconds')
+    parser.add_argument('--legacy-interval', type=int, help='Use legacy interval-based monitoring (minutes)')
 
     args = parser.parse_args()
 
@@ -771,163 +815,78 @@ if __name__ == "__main__":
         create_sample_config()
         exit()
 
-    if args.create_trading:
-        create_trading_config()
-        exit()
-
     if args.test_email:
-        print("🧪 Testing email configuration...")
+        print("Testing email configuration...")
         email_config = load_email_config()
         if not email_config:
-            print("❌ Please configure email settings first. Use --create-config to get started.")
+            print("Please configure email settings first. Use --create-config to get started.")
             exit(1)
 
         alert_system = CryptoAlertSystem(email_config)
         success = alert_system.send_test_email()
         if success:
-            print("✅ Email test passed! You're ready to receive alerts.")
+            print("Email test passed! You're ready to receive alerts.")
         else:
-            print("❌ Email test failed. Please check your configuration.")
-        exit()
-
-    if args.test_trading:
-        success = test_trading_setup()
-        if success:
-            print("✅ Trading setup is ready!")
-            print("📝 Next steps:")
-            print("   1. Implement your exchange API methods")
-            print("   2. Test thoroughly in paper mode")
-            print("   3. Run: python crypto_alerts.py --enable-trading")
+            print("Email test failed. Please check your configuration.")
         exit()
 
     if args.test_apis:
-        print("🧪 Testing API connections...")
+        print("Testing API connections...")
         results = test_api_connections()
         for api, status in results.items():
-            status_text = "✅ Working" if status else "❌ Failed"
+            status_text = "Working" if status else "Failed"
             print(f"{api}: {status_text}")
 
         if not any(results.values()):
-            print("\n⚠️  All APIs are down. Please try again later.")
+            print("\nAll APIs are down. Please try again later.")
         else:
-            print(f"\n✅ {sum(results.values())}/3 APIs are working!")
+            print(f"\n{sum(results.values())}/3 APIs are working!")
         exit()
 
     if args.list_symbols:
-        print("🔍 Getting supported symbols from Binance...")
+        print("Getting supported symbols from Binance...")
         symbols = get_supported_symbols()
-        print(f"\n✅ Supported symbols ({len(symbols)}): {', '.join(symbols)}")
-        print("\n🔥 Popular choices: BTC, ETH, BNB, ADA, SOL, LINK, AVAX, MATIC")
+        print(f"\nSupported symbols ({len(symbols)}): {', '.join(symbols)}")
+        print("\nPopular choices: BTC, ETH, BNB, ADA, SOL, LINK, AVAX, MATIC")
         exit()
 
     # Load email configuration
     email_config = load_email_config()
     if not email_config:
-        print("❌ Please configure email settings first. Use --create-config to get started.")
+        print("Please configure email settings first. Use --create-config to get started.")
         exit(1)
 
-    # Load trading configuration if auto-trading is enabled
-    trading_config = None
-    if args.enable_trading:
-        trading_config = load_trading_config()
-        if not trading_config:
-            print("❌ Trading config required for auto-trading. Use --create-trading to get started.")
-            exit(1)
-
-        # Safety check
-        if not trading_config.get('dry_run', True):
-            print("⚠️  WARNING: Auto-trading with REAL MONEY is enabled!")
-            print(f"💰 This will trade real funds on {trading_config.get('exchange_name', 'your exchange')}")
-            response = input("Are you absolutely sure? Type 'TRADE LIVE' to confirm: ")
-            if response != 'TRADE LIVE':
-                print("❌ Auto-trading cancelled for safety.")
-                exit(1)
-        else:
-            print("📝 Paper trading mode enabled - no real money will be used")
-
     # Test API connections before starting
-    print("🧪 Testing API connections...")
+    print("Testing API connections...")
     api_status = test_api_connections()
     working_apis = sum(api_status.values())
 
     if working_apis == 0:
-        print("❌ No APIs are accessible. Please check your internet connection.")
+        print("No APIs are accessible. Please check your internet connection.")
         exit(1)
     else:
-        print(f"✅ {working_apis}/3 APIs working. Proceeding...")
+        print(f"{working_apis}/3 APIs working. Proceeding...")
 
-    # Initialize alert system (with or without auto-trading)
-    if args.enable_trading and trading_config:
-        alert_system = EnhancedCryptoAlertSystem(email_config, trading_config)
-        print("🤖 Auto-trading system initialized")
-    else:
-        alert_system = CryptoAlertSystem(email_config)
-        print("📧 Email alerts only (no auto-trading)")
-
-    # Show portfolio status if requested
-    if args.portfolio_status:
-        if hasattr(alert_system, 'auto_trader') and alert_system.auto_trader:
-            status = alert_system.auto_trader.get_portfolio_status()
-            if status:
-                print("\n" + "="*50)
-                print("📊 PORTFOLIO STATUS")
-                print("="*50)
-                print(f"💰 Available Balance: ${status['available_balance']:,.2f}")
-                print(f"📊 Active Positions: {status['active_positions']}")
-                print(f"🔄 Daily Trades: {status['daily_trades']}")
-                print(f"💹 Daily PnL: ${status['daily_pnl']:+,.2f}")
-                print(f"📈 Total Position Value: ${status['total_position_value']:,.2f}")
-
-                if status['positions']:
-                    print("\n📍 Active Positions:")
-                    for pos in status['positions']:
-                        pnl_emoji = "💚" if pos['pnl'] >= 0 else "❌"
-                        print(f"   {pos['symbol']}: {pos['quantity']:.6f} @ ${pos['entry_price']:.2f} "
-                              f"({pos['pnl_percent']:+.2f}%) {pnl_emoji}")
-                else:
-                    print("   No active positions")
-        else:
-            print("❌ Portfolio status requires auto-trading to be enabled")
-        exit()
+    # Initialize alert system
+    alert_system = CryptoAlertSystem(email_config)
+    print("Email alerts system initialized")
 
     if args.test:
-        print("🧪 Running test check...")
+        print("Running test check...")
         for symbol in args.symbols:
-            print(f"\n🔍 Testing {symbol}:")
+            print(f"\nTesting {symbol}:")
             alert_system.monitor_symbol(symbol)
-        print("\n✅ Test complete")
+        print("\nTest complete")
     else:
-        # Start live monitoring
-        mode_text = "🤖 AUTO-TRADING" if args.enable_trading else "📧 EMAIL ALERTS"
-        print(f"\n🚀 Starting {mode_text} for {args.symbols}")
-        print(f"📧 Alerts will be sent to: {email_config['recipient_email']}")
-        print(f"⏰ Checking every {args.interval} minutes")
-        print("📊 Using FREE APIs: Binance + CryptoCompare + CoinGecko")
+        # Start monitoring
+        print(f"\nStarting CIRCULAR QUEUE MONITORING for {args.symbols}")
+        print(f"Alerts will be sent to: {email_config['recipient_email']}")
+        print("Using FREE APIs: Binance + CryptoCompare + CoinGecko")
 
-        if args.enable_trading:
-            dry_run = trading_config.get('dry_run', True)
-            mode = "PAPER TRADING" if dry_run else "LIVE TRADING"
-            print(f"💰 Trading Mode: {mode}")
-            print(f"🎯 Enabled Symbols: {trading_config.get('enabled_symbols', [])}")
-            print(f"⚡ Min Confidence: {trading_config.get('min_confidence', 'HIGH')}")
-
-        print("Press Ctrl+C to stop\n")
-
-        try:
-            alert_system.run_monitoring(args.symbols, args.interval)
-        except KeyboardInterrupt:
-            print("\n🛑 Monitoring stopped by user")
-
-            # Show final portfolio status if auto-trading was enabled
-            if hasattr(alert_system, 'auto_trader') and alert_system.auto_trader:
-                status = alert_system.auto_trader.get_portfolio_status()
-                if status and (status['active_positions'] > 0 or status['daily_pnl'] != 0):
-                    print("\n📊 Final Portfolio Status:")
-                    print(f"💰 Available Balance: ${status['available_balance']:,.2f}")
-                    print(f"📊 Active Positions: {status['active_positions']}")
-                    print(f"💹 Daily PnL: ${status['daily_pnl']:+,.2f}")
-
-                    if status['positions']:
-                        print("⚠️  You have active positions! Consider closing them manually.")
-
-            print("👋 Goodbye!")
+        if args.legacy_interval:
+            print(f"Using legacy mode: checking all symbols every {args.legacy_interval} minutes")
+            alert_system.run_monitoring(args.symbols, args.legacy_interval)
+        else:
+            print(f"Using circular queue: checking one symbol every {args.interval} seconds")
+            print("Press Ctrl+C to stop and see statistics\n")
+            alert_system.run_circular_monitoring(args.symbols, args.interval)
