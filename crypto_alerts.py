@@ -693,7 +693,7 @@ Trade at your own risk. Past performance doesn't guarantee future results.
         """Legacy method - redirect to circular monitoring"""
         logging.info("Redirecting to circular queue monitoring...")
         # Convert interval to seconds per symbol
-        check_interval = max(1, (interval_minutes * 60) // len(symbols))
+        check_interval = max(30, (interval_minutes * 60) // len(symbols))
         self.run_circular_monitoring(symbols, check_interval)
 
 def test_api_connections():
@@ -806,7 +806,7 @@ if __name__ == "__main__":
     parser.add_argument('--test-apis', action='store_true', help='Test API connections')
     parser.add_argument('--list-symbols', action='store_true', help='List supported symbols')
     parser.add_argument('--symbols', nargs='+', default=['ETH', 'BTC'], help='Symbols to monitor')
-    parser.add_argument('--interval', type=int, default=30, help='Check interval per symbol in seconds')
+    parser.add_argument('--interval', type=int, default=1, help='Check interval per symbol in seconds')
     parser.add_argument('--legacy-interval', type=int, help='Use legacy interval-based monitoring (minutes)')
 
     args = parser.parse_args()
