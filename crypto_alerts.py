@@ -624,7 +624,7 @@ Trade at your own risk. Past performance doesn't guarantee future results.
             return
 
         # Target: each symbol should be checked at least every 15 minutes
-        target_symbol_interval = 15 * 60  # 15 minutes in seconds
+        target_symbol_interval = 0 * 60  # 15 minutes in seconds
         actual_interval = max(check_interval_seconds, target_symbol_interval / total_symbols)
 
         logging.info(f"Starting circular queue monitoring:")
@@ -785,7 +785,7 @@ if __name__ == "__main__":
     parser.add_argument('--test-apis', action='store_true', help='Test API connections')
     parser.add_argument('--list-symbols', action='store_true', help='List supported symbols')
     parser.add_argument('--symbols', nargs='+', default=['ETH', 'BTC'], help='Symbols to monitor')
-    parser.add_argument('--interval', type=int, default=30, help='Check interval per symbol in seconds')
+    parser.add_argument('--interval', type=int, default=1, help='Check interval per symbol in seconds')
     parser.add_argument('--legacy-interval', type=int, help='Use legacy interval-based monitoring (minutes)')
 
     args = parser.parse_args()
