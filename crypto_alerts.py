@@ -693,7 +693,7 @@ Trade at your own risk. Past performance doesn't guarantee future results.
         """Legacy method - redirect to circular monitoring"""
         logging.info("Redirecting to circular queue monitoring...")
         # Convert interval to seconds per symbol
-        check_interval = max(30, (interval_minutes * 60) // len(symbols))
+        check_interval = max(1, (interval_minutes * 60) // len(symbols))
         self.run_circular_monitoring(symbols, check_interval)
 
 def test_api_connections():
