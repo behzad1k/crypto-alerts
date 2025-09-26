@@ -433,9 +433,6 @@ ACTION: {signal}
 CONFIDENCE: {confidence}
 CURRENT PRICE: ${current_price:,.2f}
 
-SIGNAL ANALYSIS:
-{reason}
-
 POSITION SUGGESTION:
 • Position Size: {position_info['size']:.4f} {symbol}
 • Position Value: ${position_info['value']:,.2f}
@@ -443,10 +440,6 @@ POSITION SUGGESTION:
 • Stop Loss: ${position_info['stop_loss']:,.2f} ({position_info['stop_loss_pct']:.1f}%)
 
 Alert Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
----
-This alert is based on our 91% accurate MACD+Momentum strategy.
-Trade at your own risk. Past performance doesn't guarantee future results.
             """
 
             msg.attach(MIMEText(body, 'plain'))
