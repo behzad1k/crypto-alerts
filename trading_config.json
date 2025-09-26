@@ -1,0 +1,11 @@
+{
+    "exchange_name": "your_exchange",
+    "api_key": "your_api_key",
+    "api_secret": "your_secret",
+    "base_url": "https://api.your-exchange.com",
+    "dry_run": true,
+    "enabled_symbols": ["BTC", "ETH"],
+    "min_confidence": "HIGH",
+    "max_position_size": 1000,
+    "risk_per_trade_high": 0.05
+}
