@@ -645,7 +645,7 @@ Trade at your own risk. Past performance doesn't guarantee future results.
             return
 
         # Target: each symbol should be checked at least every 15 minutes
-        target_symbol_interval = 15 * 60  # 15 minutes in seconds
+        target_symbol_interval = 1  # 15 minutes in seconds
         actual_interval = max(check_interval_seconds, target_symbol_interval / total_symbols)
 
         logging.info(f"Starting circular queue monitoring:")
