@@ -36,7 +36,6 @@ python crypto_alerts.py --portfolio-status # Check current positions
 
 import requests
 import pandas as pd
-import numpy as np
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
