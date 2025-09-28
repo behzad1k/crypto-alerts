@@ -1,7 +1,7 @@
 {
     "sender_email": "behzadkoohyani@gmail.com",
     "sender_password": "vkoq iyvb wkjd gieg",
-    "recipient_email": "Seskandari913@gmail.com",
+    "recipient_emails": ["bhzd1k@gmail.com"],
     "smtp_server": "smtp.gmail.com",
     "smtp_port": 587
 }

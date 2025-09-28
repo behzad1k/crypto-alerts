@@ -1,0 +1,213 @@
+
+COMPREHENSIVE MULTI-COIN TRADING STRATEGY SIMULATION
+============================================================
+⚠️  CRITICAL WARNINGS:
+- This is for educational/research purposes ONLY
+- Past performance does NOT guarantee future results
+- Testing multiple coins MASSIVELY increases overfitting risk
+- Real trading involves fees, slippage, and psychological factors
+- Many 'profitable' strategies may be statistical flukes
+- NEVER risk money you cannot afford to lose
+============================================================
+Loading multi-coin data...
+Found 8 coins: 1INCHUSDT, ATOMUSDT, AVAXUSDT, BNBUSDT, BTCUSDT, LTCUSDT, SHIBUSDT, SOLUSDT
+Testing 63 indicator combinations across 7 timeframes...
+Total scenarios per coin: 441
+Total scenarios across all coins: 3528
+
+================================================================================
+PROCESSING COIN 1/8: 1INCHUSDT
+================================================================================
+  1INCHUSDT Progress: 50/441 (11.3%)
+  1INCHUSDT Progress: 100/441 (22.7%)
+  1INCHUSDT Progress: 150/441 (34.0%)
+  1INCHUSDT Progress: 200/441 (45.4%)
+  1INCHUSDT Progress: 250/441 (56.7%)
+  1INCHUSDT Progress: 300/441 (68.0%)
+  1INCHUSDT Progress: 350/441 (79.4%)
+  1INCHUSDT Progress: 400/441 (90.7%)
+  1INCHUSDT Results: 441 strategies tested, best return: 152.3%, profitable: 213
+
+================================================================================
+PROCESSING COIN 2/8: ATOMUSDT
+================================================================================
+  ATOMUSDT Progress: 50/441 (11.3%)
+  ATOMUSDT Progress: 100/441 (22.7%)
+  ATOMUSDT Progress: 150/441 (34.0%)
+  ATOMUSDT Progress: 200/441 (45.4%)
+  ATOMUSDT Progress: 250/441 (56.7%)
+  ATOMUSDT Progress: 300/441 (68.0%)
+  ATOMUSDT Progress: 350/441 (79.4%)
+  ATOMUSDT Progress: 400/441 (90.7%)
+  ATOMUSDT Results: 441 strategies tested, best return: 154.1%, profitable: 159
+
+================================================================================
+PROCESSING COIN 3/8: AVAXUSDT
+================================================================================
+  AVAXUSDT Progress: 50/441 (11.3%)
+  AVAXUSDT Progress: 100/441 (22.7%)
+  AVAXUSDT Progress: 150/441 (34.0%)
+  AVAXUSDT Progress: 200/441 (45.4%)
+  AVAXUSDT Progress: 250/441 (56.7%)
+  AVAXUSDT Progress: 300/441 (68.0%)
+  AVAXUSDT Progress: 350/441 (79.4%)
+  AVAXUSDT Progress: 400/441 (90.7%)
+  AVAXUSDT Results: 441 strategies tested, best return: 193.6%, profitable: 170
+
+================================================================================
+PROCESSING COIN 4/8: BNBUSDT
+================================================================================
+  BNBUSDT Progress: 50/441 (11.3%)
+  BNBUSDT Progress: 100/441 (22.7%)
+  BNBUSDT Progress: 150/441 (34.0%)
+  BNBUSDT Progress: 200/441 (45.4%)
+  BNBUSDT Progress: 250/441 (56.7%)
+  BNBUSDT Progress: 300/441 (68.0%)
+  BNBUSDT Progress: 350/441 (79.4%)
+  BNBUSDT Progress: 400/441 (90.7%)
+  BNBUSDT Results: 441 strategies tested, best return: 170.4%, profitable: 256
+
+================================================================================
+PROCESSING COIN 5/8: BTCUSDT
+================================================================================
+  BTCUSDT Progress: 50/441 (11.3%)
+  BTCUSDT Progress: 100/441 (22.7%)
+  BTCUSDT Progress: 150/441 (34.0%)
+  BTCUSDT Progress: 200/441 (45.4%)
+  BTCUSDT Progress: 250/441 (56.7%)
+  BTCUSDT Progress: 300/441 (68.0%)
+  BTCUSDT Progress: 350/441 (79.4%)
+  BTCUSDT Progress: 400/441 (90.7%)
+  BTCUSDT Results: 441 strategies tested, best return: 171.5%, profitable: 183
+
+================================================================================
+PROCESSING COIN 6/8: LTCUSDT
+================================================================================
+  LTCUSDT Progress: 50/441 (11.3%)
+  LTCUSDT Progress: 100/441 (22.7%)
+  LTCUSDT Progress: 150/441 (34.0%)
+  LTCUSDT Progress: 200/441 (45.4%)
+  LTCUSDT Progress: 250/441 (56.7%)
+  LTCUSDT Progress: 300/441 (68.0%)
+  LTCUSDT Progress: 350/441 (79.4%)
+  LTCUSDT Progress: 400/441 (90.7%)
+  LTCUSDT Results: 441 strategies tested, best return: 284.9%, profitable: 221
+
+================================================================================
+PROCESSING COIN 7/8: SHIBUSDT
+================================================================================
+  SHIBUSDT Progress: 50/441 (11.3%)
+  SHIBUSDT Progress: 100/441 (22.7%)
+  SHIBUSDT Progress: 150/441 (34.0%)
+  SHIBUSDT Progress: 200/441 (45.4%)
+  SHIBUSDT Progress: 250/441 (56.7%)
+  SHIBUSDT Progress: 300/441 (68.0%)
+  SHIBUSDT Progress: 350/441 (79.4%)
+  SHIBUSDT Progress: 400/441 (90.7%)
+  SHIBUSDT Results: 441 strategies tested, best return: 344.2%, profitable: 233
+
+================================================================================
+PROCESSING COIN 8/8: SOLUSDT
+================================================================================
+  SOLUSDT Progress: 50/441 (11.3%)
+  SOLUSDT Progress: 100/441 (22.7%)
+  SOLUSDT Progress: 150/441 (34.0%)
+  SOLUSDT Progress: 200/441 (45.4%)
+  SOLUSDT Progress: 250/441 (56.7%)
+  SOLUSDT Progress: 300/441 (68.0%)
+  SOLUSDT Progress: 350/441 (79.4%)
+  SOLUSDT Progress: 400/441 (90.7%)
+  SOLUSDT Results: 441 strategies tested, best return: 201.5%, profitable: 149
+
+====================================================================================================
+SIMULATION COMPLETED - ANALYZING RESULTS
+====================================================================================================
+
+====================================================================================================
+COMPREHENSIVE MULTI-COIN SIMULATION RESULTS ANALYSIS
+====================================================================================================
+Total scenarios tested: 3528
+Coins analyzed: 8
+Scenarios with positive returns: 1584
+Scenarios beating buy & hold: 2583
+
+====================================================================================================
+COIN PROFILING - WHICH COINS RESPOND BEST TO TECHNICAL ANALYSIS
+====================================================================================================
+
+COIN RANKINGS BY BEST STRATEGY PERFORMANCE:
+----------------------------------------------------------------------------------------------------
+Rank  Coin         Best Return  Avg Return   Profitable%  Beat Hold%   Best Strategy
+----------------------------------------------------------------------------------------------------
+1     SHIBUSDT          344.2%       25.1%       52.8%       93.4% RSI + Momentum_5 + WILLR
+2     LTCUSDT           284.9%       21.3%       50.1%       46.0% MACD + Momentum_5 + STOCH
+3     SOLUSDT           201.5%        1.4%       33.8%       51.0% Momentum_10
+4     AVAXUSDT          193.6%       11.8%       38.5%       97.7% Momentum_10
+5     BTCUSDT           171.5%        0.2%       41.5%        2.5% Momentum_5
+6     BNBUSDT           170.4%       19.7%       58.0%       96.4% STOCH_D
+7     ATOMUSDT          154.1%        4.2%       36.1%       98.9% Momentum_5 + Momentum_10
+8     1INCHUSDT         152.3%        9.3%       48.3%       99.8% MACD + Momentum_5 + Momen
+
+COIN-SPECIFIC INSIGHTS:
+--------------------------------------------------------------------------------
+Most Consistent Performers (profitable strategies × avg return):
+  SHIBUSDT    : 0.133 (233/441 profitable, 25.1% avg return)
+  BNBUSDT     : 0.115 (256/441 profitable, 19.7% avg return)
+  LTCUSDT     : 0.107 (221/441 profitable, 21.3% avg return)
+  AVAXUSDT    : 0.046 (170/441 profitable, 11.8% avg return)
+  1INCHUSDT   : 0.045 (213/441 profitable, 9.3% avg return)
+
+Best Technical Analysis Candidates (strategies beating buy & hold):
+  1INCHUSDT   : 440/441 strategies (99.8%) beat buy & hold
+  ATOMUSDT    : 436/441 strategies (98.9%) beat buy & hold
+  AVAXUSDT    : 431/441 strategies (97.7%) beat buy & hold
+  BNBUSDT     : 425/441 strategies (96.4%) beat buy & hold
+  SHIBUSDT    : 412/441 strategies (93.4%) beat buy & hold
+
+====================================================================================================
+OVERALL BEST STRATEGIES ACROSS ALL COINS
+====================================================================================================
+
+TOP 15 STRATEGIES BY TOTAL RETURN:
+----------------------------------------------------------------------------------------------------
+Rank  Coin         Timeframe  Strategy                       Return     Outperform   Drawdown
+----------------------------------------------------------------------------------------------------
+1     SHIBUSDT     1h         RSI + Momentum_5 + WILLR          344.2%     375.5%      53.5%
+2     SHIBUSDT     1h         RSI + Momentum_10 + WILLR         335.6%     366.8%      54.0%
+3     SHIBUSDT     1h         RSI + WILLR                       329.9%     361.2%      54.0%
+4     SHIBUSDT     1h         RSI + MACD + WILLR                327.1%     358.4%      54.0%
+5     LTCUSDT      8h         MACD + Momentum_5 + STOCH_D       284.9%     295.6%      45.9%
+6     LTCUSDT      8h         MACD + Momentum_5 + WILLR         281.9%     292.7%      45.9%
+7     SHIBUSDT     2h         WILLR                             266.1%     297.9%      57.0%
+8     LTCUSDT      8h         RSI + MACD + Momentum_5 + Mom     257.0%     267.7%      45.9%
+9     SHIBUSDT     1h         RSI + WILLR + STOCH_D             245.3%     276.6%      52.9%
+10    LTCUSDT      8h         RSI + MACD + Momentum_5           243.6%     254.4%      45.9%
+11    LTCUSDT      8h         MACD + Momentum_5                 241.9%     252.7%      45.9%
+12    LTCUSDT      8h         RSI + MACD + Momentum_5 + Mom     223.4%     234.2%      45.9%
+13    LTCUSDT      6h         RSI + MACD + Momentum_5           215.6%     203.5%      49.3%
+14    LTCUSDT      6h         MACD + Momentum_5 + WILLR         203.1%     191.1%      46.8%
+15    LTCUSDT      6h         MACD + Momentum_5 + STOCH_D       202.2%     190.2%      46.8%
+
+BEST STRATEGY PER TIMEFRAME (ACROSS ALL COINS):
+----------------------------------------------------------------------------------------------------
+12h        | SHIBUSDT     | Momentum_10                    |   201.0% | Outperform:  226.5%
+1d         | AVAXUSDT     | Momentum_5 + Momentum_10 + STOCH_D |   136.4% | Outperform:  165.7%
+1h         | SHIBUSDT     | RSI + Momentum_5 + WILLR       |   344.2% | Outperform:  375.5%
+2h         | SHIBUSDT     | WILLR                          |   266.1% | Outperform:  297.9%
+4h         | AVAXUSDT     | Momentum_10                    |   193.6% | Outperform:  241.2%
+6h         | LTCUSDT      | RSI + MACD + Momentum_5        |   215.6% | Outperform:  203.5%
+8h         | LTCUSDT      | MACD + Momentum_5 + STOCH_D    |   284.9% | Outperform:  295.6%
+
+STRATEGY COMPLEXITY ANALYSIS:
+--------------------------------------------------
+1 indicator(s): Avg return 23.9%, Max 266.1%, Profitable: 58.3%
+2 indicator(s): Avg return 7.2%, Max 329.9%, Profitable: 38.2%
+3 indicator(s): Avg return 17.5%, Max 344.2%, Profitable: 52.8%
+4 indicator(s): Avg return 4.3%, Max 189.6%, Profitable: 36.2%
+5 indicator(s): Avg return 11.4%, Max 257.0%, Profitable: 46.1%
+6 indicator(s): Avg return -0.9%, Max 13.4%, Profitable: 30.4%
+
+Results saved:
+  Detailed results: multi_coin_simulation_detailed_20250928_055748.csv
+  Coin summaries: multi_coin_simulation_coin_summaries_20250928_055748.csv
+  Top strategies: multi_coin_simulation_top_strategies_20250928_055748.csv
