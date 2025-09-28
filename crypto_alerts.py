@@ -54,7 +54,7 @@ class AdvancedCryptoAlertSystem:
     self.symbol_queue = deque()
     self.symbol_stats = {}
     self.running = False
-    self.conf_threshold = 15
+    self.conf_threshold = 50
     self.db_path = 'crypto_signals.db'
 
     # Timeframes in minutes (for API calls)
