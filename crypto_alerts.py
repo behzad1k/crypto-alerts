@@ -522,17 +522,17 @@ class AdvancedCryptoAlertSystem:
 
     # Define alignment rules
     if timeframe == '1h':
-      df['timestamp'] = df['timestamp'].dt.floor('H')
+      df['timestamp'] = df['timestamp'].dt.floor('h')
     elif timeframe == '2h':
-      df['timestamp'] = df['timestamp'].dt.floor('2H')
+      df['timestamp'] = df['timestamp'].dt.floor('2 h')
     elif timeframe == '4h':
-      df['timestamp'] = df['timestamp'].dt.floor('4H')
+      df['timestamp'] = df['timestamp'].dt.floor('4 h')
     elif timeframe == '6h':
-      df['timestamp'] = df['timestamp'].dt.floor('6H')
+      df['timestamp'] = df['timestamp'].dt.floor('6 h')
     elif timeframe == '8h':
-      df['timestamp'] = df['timestamp'].dt.floor('8H')
+      df['timestamp'] = df['timestamp'].dt.floor('8 h')
     elif timeframe == '12h':
-      df['timestamp'] = df['timestamp'].dt.floor('12H')
+      df['timestamp'] = df['timestamp'].dt.floor('12 h')
     elif timeframe == '1d':
       df['timestamp'] = df['timestamp'].dt.floor('D')
 
