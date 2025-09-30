@@ -54,7 +54,7 @@ class AdvancedCryptoAlertSystem:
     self.symbol_queue = deque()
     self.symbol_stats = {}
     self.running = False
-    self.conf_threshold = 30
+    self.conf_threshold = 10
     self.db_path = 'crypto_signals.db'
 
     # Timeframes in minutes (for API calls)
@@ -1141,7 +1141,8 @@ class AdvancedCryptoAlertSystem:
         self.save_signal_to_db(analysis_result, current_price, stop_loss, max_validation_period)
 
         # Send email alert
-        success = self.send_email_alert(analysis_result, current_price, stop_loss, max_validation_period)
+        # success = self.send_email_alert(analysis_result, current_price, stop_loss, max_validation_period)
+        success = True
 
         if success:
           logging.info(
