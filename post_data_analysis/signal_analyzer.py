@@ -691,7 +691,7 @@ class SignalAccuracyAnalyzer:
                 combo_results['same_timeframe_two'].items(),
                 key=lambda x: self.calculate_accuracy(x[1]),
                 reverse=True
-            )[:30]
+            )[:50]
 
             print(f"  {'COMBINATION':<80} {'ACC%':<7} {'TOTAL':<7} {'B/S':<7}")
             print("  " + "-"*110)
@@ -710,7 +710,7 @@ class SignalAccuracyAnalyzer:
                 combo_results['same_timeframe_three'].items(),
                 key=lambda x: self.calculate_accuracy(x[1]),
                 reverse=True
-            )[:30]
+            )[:80]
 
             print(f"  {'COMBINATION':<95} {'ACC%':<7} {'TOTAL':<7} {'B/S':<7}")
             print("  " + "-"*125)
@@ -729,7 +729,7 @@ class SignalAccuracyAnalyzer:
                 combo_results['cross_timeframe_two'].items(),
                 key=lambda x: self.calculate_accuracy(x[1]),
                 reverse=True
-            )[:30]
+            )[:100]
 
             print(f"  {'COMBINATION':<95} {'ACC%':<7} {'TOTAL':<7} {'B/S':<7}")
             print("  " + "-"*125)
@@ -748,7 +748,7 @@ class SignalAccuracyAnalyzer:
                 combo_results['cross_timeframe_three'].items(),
                 key=lambda x: self.calculate_accuracy(x[1]),
                 reverse=True
-            )[:30]
+            )[:100]
 
             print(f"  {'COMBINATION':<110} {'ACC%':<7} {'TOTAL':<7} {'B/S':<7}")
             print("  " + "-"*140)

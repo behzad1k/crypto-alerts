@@ -1,0 +1,14 @@
+[
+  {
+    "indicator": "[12h] Momentum_5 + [2h] MACD_position + [30m] WILLR_oversold",
+    "accuracy": 0.8461538461538461,
+    "success": 11,
+    "total": 13
+  },
+  {
+    "indicator": "[12h] Momentum_5 + [8h] MOM_5_10_bullish + [8h] Momentum_10",
+    "accuracy": 0.7647058823529411,
+    "success": 13,
+    "total": 17
+  }
+]
