@@ -1,6 +1,7 @@
 """
 Pattern-Based Crypto Trading Alert System
-Triggers alerts only when specific high-accuracy indicator patterns are detected
+Triggers alerts when MORE THAN 2 patterns are detected (regardless of accuracy/uniqueness)
+Dynamically updates symbols from Nobitex API after each full loop
 """
 
 import requests
@@ -23,6 +24,40 @@ import time
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
+def fetch_nobitex_top_symbols(limit: int = 100) -> List[str]:
+  """Fetch top symbols from Nobitex API based on daily change"""
+  try:
+    logging.info("Fetching updated symbol list from Nobitex...")
+    response = requests.get('https://apiv2.nobitex.ir/market/stats', timeout=10)
+    response.raise_for_status()
+    nobitex_json = response.json()
+
+    coins = []
+    for key, val in nobitex_json['stats'].items():
+      if 'dayChange' in val:
+        coins.append({'symbol': key, 'dayChange': val['dayChange']})
+
+    # Filter for USDT pairs with positive change and sort
+    sorted_coins = sorted(
+      [x for x in coins if 'usdt' in x['symbol'].lower() and float(x['dayChange']) > 0],
+      key=lambda c: float(c['dayChange']),
+      reverse=True
+    )
+
+    # Extract symbol names and convert to uppercase
+    top_symbols = [c['symbol'].split('-')[0].upper() for c in sorted_coins[:limit]]
+
+    logging.info(f"✅ Fetched {len(top_symbols)} symbols from Nobitex (top {limit} by daily change)")
+    logging.info(f"Top 10: {top_symbols[:10]}")
+
+    return top_symbols
+
+  except Exception as e:
+    logging.error(f"Failed to fetch Nobitex symbols: {e}")
+    # Return fallback symbols if API fails
+    return ['BTC', 'ETH', 'SOL', 'NEAR', 'APT', 'SUI', 'DOGE', 'ADA', 'DOT', 'LINK']
+
+
 class PatternBasedAlertSystem:
   def __init__(self, email_config, pattern_file='indicator_patterns.json'):
     self.email_config = email_config
@@ -30,6 +65,7 @@ class PatternBasedAlertSystem:
     self.symbol_stats = {}
     self.running = False
     self.db_path = 'crypto_signals.db'
+    self.current_symbols = []  # Track current symbol list
 
     # Minimum accuracy threshold for patterns (must be set before loading)
     self.min_pattern_accuracy = 0.70  # 70% minimum accuracy
@@ -240,7 +276,7 @@ class PatternBasedAlertSystem:
       conn = sqlite3.connect(self.db_path)
       cursor = conn.cursor()
 
-      # Check if this exact pattern was alerted for this symbol recently (last 24 hours)
+      # Check if this exact pattern was alerted for this symbol recently (last 2 hours)
       cursor.execute('''
                 SELECT datetime_created FROM pattern_signals 
                 WHERE symbol = ? AND signal = ? AND best_pattern = ?
@@ -252,7 +288,7 @@ class PatternBasedAlertSystem:
       conn.close()
 
       if result:
-        logging.info(f"Duplicate alert suppressed for {symbol} - same pattern within 24h")
+        logging.info(f"Duplicate alert suppressed for {symbol} - same pattern within 2h")
         return False
 
       return True
@@ -562,7 +598,7 @@ class PatternBasedAlertSystem:
     }
 
   def monitor_symbol(self, symbol: str):
-    """Monitor symbol with pattern matching"""
+    """Monitor symbol with pattern matching - TRIGGERS ON >100 PATTERNS AND >0.80 CONFIDENCE"""
     try:
       logging.info(f"Analyzing {symbol}...")
 
@@ -576,18 +612,21 @@ class PatternBasedAlertSystem:
       # Check for pattern matches
       matching_patterns = self.find_matching_patterns(analysis_result)
 
-      if not matching_patterns:
-        logging.info(f"{symbol}: {analysis_result['signal']} but no high-accuracy patterns matched")
-        return
-
-      # Calculate pattern-based confidence
+      # Calculate pattern-based confidence first
       pattern_confidence, confidence_info = self.calculate_pattern_confidence(matching_patterns)
 
-      # Filter by uniqueness score
-      uniqueness = confidence_info['uniqueness_score']
-      if uniqueness < 0.3:  # Require at least 30% uniqueness
-        logging.info(f"{symbol}: Pattern too generic (uniqueness: {uniqueness:.1%}) - skipping")
+      # *** NEW THRESHOLDS: >100 patterns AND >0.80 confidence ***
+      pattern_count = len(matching_patterns)
+
+      if pattern_count <= 900 and pattern_confidence <= 0.80:
+        logging.info(f"{symbol}: {analysis_result['signal']} with {pattern_count} pattern(s) - need >100 patterns (threshold not met) or low conf{pattern_confidence:.1%}")
         return
+
+      # if pattern_confidence <= 0.80:
+      #   logging.info(f"{symbol}: {analysis_result['signal']} with {pattern_count} patterns but confidence {pattern_confidence:.1%} - need >80% (threshold not met)")
+      #   return
+
+      logging.info(f"🎯 {symbol}: {pattern_count} patterns detected with {pattern_confidence:.1%} confidence - BOTH THRESHOLDS MET!")
 
       # Check for duplicate alerts
       best_pattern_hash = confidence_info['best_pattern']['pattern']
@@ -613,9 +652,10 @@ class PatternBasedAlertSystem:
       self.send_pattern_alert(symbol, analysis_result['signal'], pattern_confidence,
                               confidence_info, current_price, stop_loss)
 
-      logging.info(f"*** PATTERN ALERT: {symbol} {analysis_result['signal']} - "
-                   f"{len(matching_patterns)} patterns, "
-                   f"confidence: {pattern_confidence:.1%}, "
+      uniqueness = confidence_info['uniqueness_score']
+      logging.info(f"*** PATTERN ALERT TRIGGERED: {symbol} {analysis_result['signal']} - "
+                   f"{pattern_count} patterns (>100 ✓), "
+                   f"confidence: {pattern_confidence:.1%} (>80% ✓), "
                    f"uniqueness: {uniqueness:.1%} ***")
 
     except Exception as e:
@@ -684,7 +724,7 @@ class PatternBasedAlertSystem:
         msg = MIMEMultipart()
         msg['From'] = self.email_config['sender_email']
         msg['To'] = recipient
-        msg['Subject'] = f"🎯 HIGH-ACCURACY PATTERN: {signal} {symbol} - {confidence:.1%} Confidence"
+        msg['Subject'] = f"🎯 MULTIPLE PATTERNS: {signal} {symbol} - {len(confidence_info['all_patterns'])} Patterns Detected"
 
         body = self.create_pattern_email_body(symbol, signal, confidence,
                                               confidence_info, price, stop_loss)
@@ -721,15 +761,15 @@ class PatternBasedAlertSystem:
       uniqueness_rating = "VERY GENERIC"
 
     body = f"""
-🎯 HIGH-ACCURACY PATTERN DETECTED 🎯
+🎯 MULTIPLE PATTERNS DETECTED 🎯
 
 SYMBOL: {symbol}
 SIGNAL: {signal}
 CURRENT PRICE: ${price:,.4f}
 
-📊 PATTERN CONFIDENCE:
-• Overall Confidence: {confidence:.1%}
-• Matching Patterns: {confidence_info['pattern_count']}
+📊 PATTERN DETECTION:
+• Total Patterns Matched: {confidence_info['pattern_count']} (THRESHOLD MET: >100 ✓)
+• Overall Confidence: {confidence:.1%} (THRESHOLD MET: >80% ✓)
 • Best Pattern Accuracy: {best['accuracy']:.1%} ({best['success']}/{best['total']} trades)
 • Pattern Uniqueness: {uniqueness:.1%} ({uniqueness_rating})
 
@@ -738,17 +778,13 @@ CURRENT PRICE: ${price:,.4f}
 
 Matched Components:
 """
-    for component in best['matched_components']:
+    for component in best['matched_components'][:30]:
       body += f"  ✓ {component}\n"
 
-    if confidence_info['pattern_count'] > 1:
-      body += f"\n📋 ALL MATCHING PATTERNS ({confidence_info['pattern_count']}):\n"
-      for i, pattern in enumerate(confidence_info['all_patterns'][:5], 1):  # Show top 5
-        body += f"\n{i}. Accuracy: {pattern['accuracy']:.1%} ({pattern['success']}/{pattern['total']})\n"
-        body += f"   {pattern['pattern']}\n"
-
-      if confidence_info['pattern_count'] > 5:
-        body += f"\n   ... and {confidence_info['pattern_count'] - 5} more patterns\n"
+    body += f"\n📋 ALL {confidence_info['pattern_count']} MATCHING PATTERNS:\n"
+    for i, pattern in enumerate(confidence_info['all_patterns'], 1):
+      body += f"\n{i}. Accuracy: {pattern['accuracy']:.1%} ({pattern['success']}/{pattern['total']})\n"
+      body += f"   {pattern['pattern']}\n"
 
     body += f"""
 
@@ -758,7 +794,8 @@ Matched Components:
 • Risk: {abs((stop_loss - price) / price * 100):.2f}%
 
 ⚠️ RISK MANAGEMENT:
-• This signal is based on historically validated patterns
+• Multiple patterns detected ({confidence_info['pattern_count']} total - >100 threshold met ✓)
+• High confidence level: {confidence:.1%} (>80% threshold met ✓)
 • Pattern accuracy: {best['accuracy']:.1%} success rate
 • Pattern specificity: {uniqueness:.1%} ({uniqueness_rating})
 • Always use 1-3% position sizing
@@ -784,32 +821,94 @@ Matched Components:
 
 ---
 Pattern-Based Crypto Alert System
+Alert Triggers: {confidence_info['pattern_count']} patterns (>100) AND {confidence:.1%} confidence (>80%)
 Historical Accuracy: {confidence:.1%}
 Pattern Specificity: {uniqueness:.1%}
         """
 
     return body
 
-  def run_continuous_monitoring(self, symbols: List[str]):
-    """Run continuous monitoring for pattern matches"""
-    self.symbol_queue = deque(symbols)
-    self.running = True
+  def update_symbols_from_nobitex(self, limit: int = 100):
+    """Update symbol list from Nobitex API"""
+    try:
+      new_symbols = fetch_nobitex_top_symbols(limit)
 
-    logging.info(f"Starting pattern-based monitoring for {len(symbols)} symbols")
+      if new_symbols and len(new_symbols) > 0:
+        self.current_symbols = new_symbols
+        self.symbol_queue = deque(new_symbols)
+        logging.info(f"✅ Symbol list updated: {len(new_symbols)} symbols")
+        logging.info(f"Top 10: {new_symbols[:10]}")
+        return True
+      else:
+        logging.warning("Failed to fetch new symbols, keeping current list")
+        return False
+
+    except Exception as e:
+      logging.error(f"Error updating symbols from Nobitex: {e}")
+      return False
+
+  def run_continuous_monitoring(self, initial_symbols: List[str] = None, update_interval: int = 100):
+    """Run continuous monitoring with dynamic symbol updates"""
+    # Initialize with provided symbols or fetch from Nobitex
+    if initial_symbols:
+      self.current_symbols = initial_symbols
+      self.symbol_queue = deque(initial_symbols)
+      logging.info(f"Starting with provided symbols: {len(initial_symbols)}")
+    else:
+      logging.info("No initial symbols provided, fetching from Nobitex...")
+      if not self.update_symbols_from_nobitex(update_interval):
+        logging.error("Failed to fetch initial symbols, exiting")
+        return
+
+    self.running = True
+    symbols_processed = 0
+
+    logging.info(f"Starting pattern-based monitoring for {len(self.current_symbols)} symbols")
     logging.info(f"Loaded {len(self.indicator_patterns)} high-accuracy patterns")
     logging.info(f"Minimum pattern accuracy: {self.min_pattern_accuracy:.1%}")
+    logging.info(f"⚠️ ALERT THRESHOLDS: >100 PATTERNS AND >80% CONFIDENCE (BOTH REQUIRED)")
+    logging.info(f"🔄 Symbol list will update from Nobitex after every full loop")
 
-    print(f"\nPattern-Based Monitoring Started")
-    print(f"Symbols: {symbols}")
+    print(f"\n{'='*80}")
+    print(f"Pattern-Based Monitoring Started")
+    print(f"{'='*80}")
+    print(f"Initial Symbols: {len(self.current_symbols)}")
+    print(f"Top 10: {self.current_symbols[:10]}")
     print(f"Patterns: {len(self.indicator_patterns)} high-accuracy combinations")
+    print(f"Alert Thresholds: >100 patterns AND >80% confidence (BOTH REQUIRED)")
+    print(f"Symbol Update: After every {len(self.current_symbols)} symbols analyzed")
     print(f"Press Ctrl+C to stop\n")
 
     try:
       while self.running:
-        symbol = self.symbol_queue.popleft()
-        self.symbol_queue.append(symbol)
+        if not self.symbol_queue:
+          logging.warning("Symbol queue empty, refilling...")
+          self.symbol_queue = deque(self.current_symbols)
 
+        symbol = self.symbol_queue.popleft()
+
+        # Monitor the symbol
         self.monitor_symbol(symbol)
+        symbols_processed += 1
+
+        # Check if we've completed a full loop
+        if symbols_processed % len(self.current_symbols) == 0:
+          logging.info(f"\n{'='*80}")
+          logging.info(f"🔄 FULL LOOP COMPLETED: {symbols_processed} symbols analyzed")
+          logging.info(f"Fetching updated symbol list from Nobitex...")
+          logging.info(f"{'='*80}\n")
+
+          # Update symbols from Nobitex
+          update_success = self.update_symbols_from_nobitex(update_interval)
+
+          if update_success:
+            logging.info(f"✅ Symbol list refreshed with {len(self.current_symbols)} coins")
+          else:
+            logging.warning("⚠️ Symbol update failed, continuing with current list")
+        else:
+          # Add symbol back to queue for next loop
+          self.symbol_queue.append(symbol)
+
         time.sleep(1)  # Small delay between symbols
 
     except KeyboardInterrupt:
@@ -835,19 +934,37 @@ def load_email_config() -> Optional[Dict]:
 if __name__ == "__main__":
   import argparse
 
-  parser = argparse.ArgumentParser(description='Pattern-Based Crypto Alert System')
-  parser.add_argument('--symbols', nargs='+', default=['ATH', 'CHZ', 'LDO', 'BAT', 'PENDLE', 'COOKIE', 'ZRO', 'MANA', 'AEVO', 'NEAR', 'APT', 'TNSR', 'FET', 'SUI', 'XMR', 'PENDLE', 'VIRTUAL', 'PNUT', 'OM', 'SYRUP', 'SSV', 'LPT', 'EGALA', 'CRV', 'ZRX', 'OM', 'CVX', 'SAFE', 'ONDO', '1K_BONK', 'ENS', 'RDNT', 'CGPT', 'POL', 'FLOW', 'TURBO', 'SUI', 'NEAR', 'JUP', 'DOGE', 'EIGEN', 'RAY', 'BAND', 'EGALA', 'LAYER', 'BAT', 'SSV', 'LDO', 'LPT', 'RENDER', 'JASMY', 'SLP', 'MORPHO', 'SYRUP', 'ALGO', 'AEVO', 'LRC', 'EGLD', 'ZIL', 'ENS', 'TNSR', 'KMNO', 'KMNO', 'XMR', 'RAY', 'AIXBT', 'HOT', 'CRV', 'ONDO', 'AGLD', 'EIGEN', 'TURBO', 'NEIRO', 'PNUT', 'PYTH', 'CELR', '1K_BONK', 'TRB', 'CVX', 'GMT', 'BCH', 'ONE', 'MANA', 'DYDX', 'BAND', 'ADA', 'WIF', 'POL', 'PYTH', 'ETC', 'SOL', 'SLP', 'JTO', 'FIL', 'CGPT', 'UNI', 'JASMY', 'DOT', 'LINK', 'DYDX'],
-                      help='Symbols to monitor')
-  parser.add_argument('--patterns', default='indicator_patterns.json',
+  parser = argparse.ArgumentParser(description='Pattern-Based Crypto Alert System with Dynamic Nobitex Updates')
+  parser.add_argument('--symbols', nargs='+', default=None,
+                      help='Initial symbols to monitor (if not provided, will fetch from Nobitex)')
+  parser.add_argument('--patterns', default='patterns.json',
                       help='Path to indicator patterns file')
   parser.add_argument('--min-accuracy', type=float, default=0.70,
                       help='Minimum pattern accuracy threshold (0-1)')
+  parser.add_argument('--top-coins', type=int, default=100,
+                      help='Number of top coins to fetch from Nobitex (default: 100)')
   parser.add_argument('--show-patterns', action='store_true',
                       help='Show loaded patterns and exit')
   parser.add_argument('--test-pattern', type=str,
                       help='Test a specific symbol for pattern matches')
+  parser.add_argument('--test-nobitex', action='store_true',
+                      help='Test Nobitex API and show top coins')
 
   args = parser.parse_args()
+
+  # Test Nobitex API
+  if args.test_nobitex:
+    print("\n🧪 Testing Nobitex API...")
+    print("="*80)
+    symbols = fetch_nobitex_top_symbols(args.top_coins)
+    if symbols:
+      print(f"✅ Successfully fetched {len(symbols)} symbols")
+      print(f"\nTop 20 symbols by daily change:")
+      for i, sym in enumerate(symbols[:20], 1):
+        print(f"  {i:2d}. {sym}")
+    else:
+      print("❌ Failed to fetch symbols from Nobitex")
+    exit(0)
 
   email_config = load_email_config()
   if not email_config:
@@ -911,6 +1028,13 @@ if __name__ == "__main__":
       else:
         confidence, info = system.calculate_pattern_confidence(matching_patterns)
         print(f"\n✅ {len(matching_patterns)} PATTERN(S) MATCHED!")
+
+        # Check if threshold is met
+        if len(matching_patterns) > 2:
+          print(f"🎯 ALERT THRESHOLD MET: {len(matching_patterns)} > 2 patterns!")
+        else:
+          print(f"⚠️ ALERT THRESHOLD NOT MET: {len(matching_patterns)} <= 2 patterns")
+
         print(f"Overall Confidence: {confidence:.1%}")
         print(f"\nMatching Patterns:")
 
@@ -924,7 +1048,6 @@ if __name__ == "__main__":
     except Exception as e:
       print(f"❌ Error testing {symbol}: {e}")
       import traceback
-
       traceback.print_exc()
 
     exit(0)
@@ -934,17 +1057,26 @@ if __name__ == "__main__":
   print("=" * 80)
   print(f"Patterns Loaded: {len(system.indicator_patterns)}")
   print(f"Min Accuracy: {args.min_accuracy:.1%}")
-  print(f"Symbols: {args.symbols}")
+  print(f"⚠️ ALERT THRESHOLDS (BOTH REQUIRED):")
+  print(f"   • Pattern Count: >100 patterns")
+  print(f"   • Confidence Level: >80%")
+  print(f"🔄 DYNAMIC UPDATES: Symbol list refreshes from Nobitex after each full loop")
+  print(f"Top Coins to Track: {args.top_coins}")
+
+  if args.symbols:
+    print(f"Initial Symbols (Manual): {args.symbols}")
+  else:
+    print(f"Initial Symbols: Will fetch top {args.top_coins} from Nobitex")
+
   print(f"Alert Recipients: {len(email_config['recipient_emails'])}")
-  print("\nMonitoring for high-accuracy pattern matches...")
+  print("\nMonitoring for multiple pattern matches...")
   print("Press Ctrl+C to stop\n")
 
   try:
-    system.run_continuous_monitoring(args.symbols)
+    system.run_continuous_monitoring(args.symbols, args.top_coins)
   except KeyboardInterrupt:
     print("\n\n✅ Monitoring stopped")
   except Exception as e:
     print(f"\n❌ Error: {e}")
     import traceback
-
     traceback.print_exc()

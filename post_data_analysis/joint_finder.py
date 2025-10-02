@@ -5,8 +5,8 @@ from faiss import loaded
 json_files = [
   # 'db1.json',
   # 'db3.json',
-  'db4.json',
-  # 'db5.json'
+  # 'db4.json',
+  'db5.json'
 ]
 tables = []
 
@@ -33,7 +33,7 @@ for json_file in json_files:
           'accuracy': successfulSignals/newBuySignals
         }
 
-tables = sorted([x for x in tables if x['accuracy'] > .70], key=lambda x: x['accuracy'], reverse=True)
+tables = sorted([x for x in tables if x['accuracy'] > .75], key=lambda x: x['accuracy'], reverse=True)
 json.dump(tables, open('../patterns.json', 'w'))
 # for x in tables[:100]:
   # print(f"{x['indicator']}: {x['accuracy']*100:.2f}% / {x['total']}")
