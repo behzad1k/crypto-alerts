@@ -618,7 +618,7 @@ class PatternBasedAlertSystem:
       # *** NEW THRESHOLDS: >100 patterns AND >0.80 confidence ***
       pattern_count = len(matching_patterns)
 
-      if pattern_count <= 700 and pattern_confidence <= 0.80:
+      if pattern_count <= 200:
         logging.info(f"{symbol}: {analysis_result['signal']} with {pattern_count} pattern(s) - need >100 patterns (threshold not met) or low conf{pattern_confidence:.1%}")
         return
 
