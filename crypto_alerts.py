@@ -39,9 +39,9 @@ def fetch_nobitex_top_symbols(limit: int = 100) -> List[str]:
 
     # Filter for USDT pairs with positive change and sort
     sorted_coins = sorted(
-      [x for x in coins if 'usdt' in x['symbol'].lower() and float(x['dayChange']) > 0],
+      [x for x in coins if 'usdt' in x['symbol'].lower() and float(x['dayChange']) < 0],
       key=lambda c: float(c['dayChange']),
-      reverse=True
+      reverse=False
     )
 
     # Extract symbol names and convert to uppercase
